@@ -3,13 +3,13 @@ import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import emailjs from "emailjs-com";
 import { getData } from "country-list";
-import countryData from "country-telephone-data";
+// import countryData from "country-telephone-data";
 
-interface Country {
-  name: string;
-  iso2: string;
-  dialCode: string;
-}
+// interface Country {
+//   name: string;
+//   iso2: string;
+//   dialCode: string;
+// }
 
 export default function ContactForm() {
   const [firstName, setFirstName] = useState("");
@@ -33,11 +33,11 @@ export default function ContactForm() {
 
   // COUNTRY + CODE
   const countries = getData();
-  const phoneCodes: Country[] = countryData.allCountries.map((c) => ({
-    name: c.name,
-    iso2: c.iso2,
-    dialCode: c.dialCode,
-  }));
+  // const phoneCodes: Country[] = countryData.allCountries.map((c) => ({
+  //   name: c.name,
+  //   iso2: c.iso2,
+  //   dialCode: c.dialCode,
+  // }));
 
   // Email validation
   const validateEmail = (value: string) => {
