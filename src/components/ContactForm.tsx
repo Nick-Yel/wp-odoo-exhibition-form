@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
+// import { createPortal } from "react-dom";
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import { getCountries, getCountryCallingCode, isSupportedCountry } from "libphonenumber-js";
+import { getCountries, isSupportedCountry } from "libphonenumber-js";
 
 export default function ContactForm() {
   const [firstName, setFirstName] = useState("");
@@ -14,14 +15,14 @@ export default function ContactForm() {
   // phoneCountry mirrors the select-driven country for PhoneInput (lowercase or undefined)
   const [phoneCountry, setPhoneCountry] = useState<string | undefined>();
   const [message, setMessage] = useState("");
-  const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreeMarketing, setAgreeMarketing] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const [modal, setModal] = useState<{ open: boolean; message: string; type: "success" | "error" }>({
-    open: false,
-    message: "",
-    type: "success",
-  });
+
+  // Track form submission success
+  const [formSubmitted, setFormSubmitted] = useState(false);
+
+  // Toast message state
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // EMAIL + OTP
   const [email, setEmail] = useState("");
@@ -33,6 +34,21 @@ export default function ContactForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   // NEW: loading states for API actions
   const [otpTimer, setOtpTimer] = useState(0);
+
+  // Show toast and auto-hide after 2 seconds
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 2000);
+  };
+
+  // Countdown for OTP resend
+  useEffect(() => {
+    if (otpTimer <= 0) return;
+    const id = setInterval(() => {
+      setOtpTimer((t) => (t > 1 ? t - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [otpTimer]);
 
   // Get page URL and title
   const [pageUrl, setPageUrl] = useState("");
@@ -104,7 +120,7 @@ export default function ContactForm() {
 
     setIsSendingOtp(true);
     try {
-      const res = await fetch("http://localhost:8871/send-otp", {
+      const res = await fetch("https://odoo.royisal.com/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -113,14 +129,10 @@ export default function ContactForm() {
       const data = await res.json();
 
       if (!data.success) {
-        setModal({ open: true, message: data.error || "Failed to send OTP", type: "error" });
+        showToast(data.error || "Failed to send OTP", "error");
         return;
       }
-      setModal({
-        open: true,
-        message: "OTP sent! Check your email inbox, spam folder, or Promotions tab for the email.",
-        type: "success",
-      });
+      showToast("OTP sent! Check your email.", "success");
       // Store OTP in localStorage
       localStorage.setItem(
         "email_otp",
@@ -132,7 +144,7 @@ export default function ContactForm() {
       
     } catch (err) {
       console.error(err);
-      
+      showToast("Network error! Please try again.", "error");
     } finally {
       setIsSendingOtp(false);
     }
@@ -143,14 +155,14 @@ export default function ContactForm() {
     const stored = localStorage.getItem("email_otp");
 
     if (!stored) {
-      setModal({ open: true, message: "No OTP stored — request again", type: "error" });
+      showToast("No OTP stored — request again", "error");
       return;
     }
 
     const { code, expires } = JSON.parse(stored);
 
     if (Date.now() > expires) {
-      setModal({ open: true, message: "OTP expired, please resend", type: "error" });
+      showToast("OTP expired, please resend", "error");
       localStorage.removeItem("email_otp");
       return;
     }
@@ -158,9 +170,9 @@ export default function ContactForm() {
     if (otp === code) {
       setVerified(true);
       localStorage.removeItem("email_otp");
-      setModal({ open: true, message: "Email verified!", type: "success" });
+      showToast("Email verified!", "success");
     } else {
-      setModal({ open: true, message: "Invalid OTP!", type: "error" });
+      showToast("Invalid OTP!", "error");
     }
   };
 
@@ -169,7 +181,7 @@ export default function ContactForm() {
     e.preventDefault();
 
     if (!verified) {
-      setModal({ open: true, message: "Please verify your email first!", type: "error" });
+      alert("Please verify your email first!");
       return;
     }
 
@@ -185,7 +197,7 @@ export default function ContactForm() {
       fd.append("businessStatus", businessStatus);
       fd.append("country", country);
       fd.append("message", message || "");
-      fd.append("agreeTerms", agreeTerms ? "true" : "false");
+      fd.append("agreeTerms", "true"); // Always true since form can't be submitted without verification
       fd.append("agreeMarketing", agreeMarketing ? "true" : "false");
 
       // attach page url and title
@@ -201,16 +213,13 @@ export default function ContactForm() {
     setIsSubmitting(true);
     try {
       const formLead = buildFormData();
-      await fetch("http://localhost:8871/add-lead", {
+      await fetch("https://odoo.royisal.com/add-lead", {
         method: "POST",
         body: formLead,
       });
 
-      setModal({
-        open: true,
-        message: "✔ Message sent & CRM lead created! Check your email inbox, spam folder, or Promotions tab for the email.",
-        type: "success",
-      });
+     // Hide form and show thank you message
+     setFormSubmitted(true);
 
      // Check if page title contains "gothic" and redirect after 2.5 seconds
      const titleLower = pageTitle.toLowerCase();
@@ -222,7 +231,7 @@ export default function ContactForm() {
      }
     } catch (err) {
       console.error(err);
-      setModal({ open: true, message: "❌ Failed, please try again", type: "error" });
+      alert("❌ Failed, please try again");
     } finally {
       setIsSubmitting(false);
     }
@@ -234,9 +243,69 @@ export default function ContactForm() {
     );
   };
 
+  // If form is submitted, show thank you message
+  if (formSubmitted) {
+    return (
+      <div className="max-w-lg mx-auto bg-white p-8 rounded-xl shadow-md text-center space-y-6" style={{ fontFamily: "'Kanit', sans-serif" }}>
+        <h2 className="text-2xl md:text-3xl font-bold text-[#a50019]">
+          Thank you for reaching out to us!
+        </h2>
+        <p className="text-base md:text-lg">
+          Your inquiry matters, and our team will be in touch within 24 hours.
+        </p>
+
+        <div className="space-y-4">
+          <p className="font-semibold">In the meantime, you can:</p>
+          <ul className="space-y-2 text-left list-disc list-inside">
+            <li>
+              <a href="https://www.linkedin.com/company/royi-sal-jewelry" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline">
+                Connect with us on LinkedIn
+              </a>
+            </li>
+            <li>
+              <a href="https://www.facebook.com/royisaljewelry" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline">
+                Message us on Facebook
+              </a>
+            </li>
+            <li>
+              <a href="https://www.instagram.com/royisaljewelry/" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline">
+                Follow us on Instagram
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <p className="text-sm md:text-base">
+          We'd also love your feedback. Please take a moment to fill out our short{" "}
+          <a href="https://royisal.com/feedback" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline font-semibold">
+            Feedback Form
+          </a>
+          . It's completely anonymous and helps us improve the way we support you.
+        </p>
+
+        <p className="text-base md:text-lg font-semibold mt-6">
+          Wishing you a wonderful day,<br />
+          <span className="text-[#a50019]">The Royi Sal Team</span>
+        </p>
+      </div>
+    );
+  }
+
   return (
+    <>
+    {/* Toast notification */}
+    {toast && (
+      <div
+        className={`fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-[10000] transition-opacity ${
+          toast.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+        }`}
+      >
+        {toast.message}
+      </div>
+    )}
+    
     <form
-      className="max-w-lg mx-auto bg-white p-6 rounded-xl shadow-md space-y-6"
+      className="max-w-lg mx-auto bg-white p-6 rounded-xl shadow-md space-y-6 text-sm md:text-base"
       style={{ fontFamily: "'Kanit', sans-serif" }}
       onSubmit={handleSubmit}
     >
@@ -257,30 +326,30 @@ export default function ContactForm() {
 
       {/* Name (responsive flex) */}
       <div className="flex flex-col gap-2">
-        <label className="font-medium" style={{ fontSize: "1.1rem",fontWeight: 400 }}>First Name*</label>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>First name*</label>
         <input
           value={firstName}
           onChange={(e) => setFirstName(e.target.value)}
           placeholder="First Name"
-          className="w-full h-12 border border-black rounded-[10px] px-3"
+          className="w-full h-12 border border-black rounded-[10px] px-3 text-sm md:text-base"
           required
         />
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="font-medium" style={{ fontSize: "1.1rem",fontWeight: 400 }}>Last Name*</label>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Last Name*</label>
         <input
           value={lastName}
           onChange={(e) => setLastName(e.target.value)}
           placeholder="Last Name"
-          className="w-full h-12 border border-black rounded-[10px] px-3"
+          className="w-full h-12 border border-black rounded-[10px] px-3 text-sm md:text-base"
           required
         />
       </div>
 
       {/* Email + OTP */}
       <div>
-        <label className="font-medium" style={{ fontSize: "1.1rem",fontWeight: 400 }}>Email*</label>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Email*</label>
         <input
           type="email"
           value={email}
@@ -352,19 +421,19 @@ export default function ContactForm() {
 
       {/* Company */}
       <div>
-        <label className="font-medium" style={{ fontSize: "1.1rem",fontWeight: 400 }}>Company Name*</label>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Company Name*</label>
         <input
           value={company}
           onChange={(e) => setCompany(e.target.value)}
           placeholder="Company Name"
-          className="w-full h-12 border border-black rounded-[10px] px-3 mt-2"
+          className="w-full h-12 border border-black rounded-[10px] px-3 mt-2 text-sm md:text-base"
           required
         />
       </div>
 
       {/* Service checkboxes */}
       <div className="flex flex-col gap-2">
-        <label className="font-medium" style={{ fontSize: "1.1rem",fontWeight: 400 }}>How can we help you?*</label>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>How can we help you?*</label>
         <div className="flex flex-col gap-1">
           {["ODM", "OEM", "Other"].map((option) => (
             <label key={option} className="flex items-center gap-2">
@@ -383,7 +452,7 @@ export default function ContactForm() {
 
       {/* Business Status */}
       <div>
-        <label className="font-medium" style={{ fontSize: "1.1rem",fontWeight: 400 }}>Business Status*</label>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Business Status*</label>
         <select
           value={businessStatus}
           onChange={(e) => setBusinessStatus(e.target.value)}
@@ -392,14 +461,14 @@ export default function ContactForm() {
         >
           <option value="">Select Business Status</option>
           <option value="In the business">In the business</option>
-          <option value="Startup">Startup</option>
-          <option value="Other">Other</option>
+          <option value="Start Up">Start up</option>
+          <option value="Concept Stage">Concept Stage</option>
         </select>
       </div>
 
       {/* Country */}
       <div>
-        <label className="font-medium" style={{ fontSize: "1.1rem",fontWeight: 400 }}>Country*</label>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Country*</label>
         <select
           value={country}
           onChange={(e) => setCountry(e.target.value)}
@@ -417,7 +486,7 @@ export default function ContactForm() {
 
       {/* Phone */}
       <div>
-        <label className="font-medium" style={{ fontSize: "1.1rem",fontWeight: 400 }}>Phone*</label>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Phone*</label>
         <div className="mt-2">
           <PhoneInput
             defaultCountry={phoneCountry as any}
@@ -452,7 +521,7 @@ export default function ContactForm() {
       />
 
       {/* File Upload Button */}
-      <label className="font-medium" style={{ fontSize: "1.1rem",fontWeight: 400 }}>Upload Images <br /> (e.g., concept art, designs, inspirations)</label>
+      <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Upload Images <br /> (e.g., concept art, designs, inspirations)</label>
       <label className="block w-full border border-gray-400 rounded-lg px-3 py-2 text-center cursor-pointer bg-white hover:bg-gray-50">
         
         {files.length > 0 ? `${files.length} file(s) selected` : "Choose file(s)"}
@@ -491,24 +560,37 @@ export default function ContactForm() {
       >
         {isSubmitting ? "Submitting..." : "Submit"}
       </button>
-
-    {modal.open && (
-      <div className="fixed inset-0 flex items-center justify-center min-w-full  bg-opacity-50 z-50">
-        <div className="bg-white rounded-xl shadow-lg p-6 w-1/3 text-center">
-          <h2 className={`text-lg font-bold mb-4 ${modal.type === "error" ? "text-red-600" : "text-green-600"}`}>
-            {modal.type === "error" ? "Error" : "Success"}
-          </h2>
-          <p className="mb-4">{modal.message}</p>
-          <button
-            className="px-4 py-2 bg-[#a50019] text-white rounded-lg"
-            onClick={() => setModal({ ...modal, open: false })}
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    )}
-
     </form>
+
+    {/* {modal.open &&
+      createPortal(
+        <div 
+         className="flex items-center justify-center bg-black bg-opacity-50 z-[9999] p-4"
+         style={{ 
+           position: 'fixed',
+           top: 0,
+           left: 0,
+           width: '100vw',
+           height: '100vh',
+           margin: 0
+         }}
+        >
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md text-center">
+            <h2 className={`text-lg font-bold mb-4 ${modal.type === "error" ? "text-red-600" : "text-green-600"}`}>
+              {modal.type === "error" ? "Error" : "Success"}
+            </h2>
+            <p className="mb-4 text-sm md:text-base">{modal.message}</p>
+            <button
+              className="px-4 py-2 bg-[#a50019] text-white rounded-lg hover:bg-[#8f0016] hover:cursor-pointer"
+              onClick={() => setModal({ ...modal, open: false })}
+            >
+              Close
+            </button>
+          </div>
+        </div>,
+        // If in iframe, try to render in parent window; otherwise use current document
+        (window.parent !== window ? window.parent.document.body : document.body)
+      )} */}
+    </>
   );
 }
