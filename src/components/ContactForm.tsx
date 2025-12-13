@@ -164,7 +164,7 @@ export default function ContactForm() {
       localStorage.setItem(
         "email_otp",
         JSON.stringify({ code: data.otp, expires: Date.now() + 5 * 60 * 1000 })
-      );
+       );
 
       setOtpSent(true);
       setOtpTimer(30);
@@ -228,6 +228,7 @@ export default function ContactForm() {
       fd.append("agreeMarketing", agreeMarketing ? "true" : "false");
 
       // attach page url and title
+      fd.append("source_online", pageUrl);
       fd.append("pageUrl", pageUrl);
       fd.append("pageTitle", pageTitle);
       fd.append("utm_source", utm.source);
@@ -291,7 +292,7 @@ export default function ContactForm() {
           <p className="font-semibold">In the meantime, you can:</p>
           <ul className="space-y-2 text-left list-disc list-inside">
             <li>
-              <a href="https://www.linkedin.com/company/royi-sal-jewelry" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline">
+              <a href="https://www.linkedin.com/company/royisal/" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline">
                 Connect with us on LinkedIn
               </a>
             </li>
@@ -301,7 +302,7 @@ export default function ContactForm() {
               </a>
             </li>
             <li>
-              <a href="https://www.instagram.com/royisaljewelry/" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline">
+              <a href="https://www.instagram.com/royisal/" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline">
                 Follow us on Instagram
               </a>
             </li>
@@ -310,7 +311,7 @@ export default function ContactForm() {
 
         <p className="text-sm md:text-base">
           We'd also love your feedback. Please take a moment to fill out our short{" "}
-          <a href="https://royisal.com/feedback" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline font-semibold">
+          <a href="https://tally.so/r/waVyx9" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline font-semibold">
             Feedback Form
           </a>
           . It's completely anonymous and helps us improve the way we support you.
@@ -553,18 +554,23 @@ export default function ContactForm() {
         className="w-full border border-black rounded-[10px] px-3 py-2"
       />
 
-      {/* File Upload Button */}
-      <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Upload Images <br /> (e.g., concept art, designs, inspirations)</label>
-      <label className="block w-full border border-gray-400 rounded-lg px-3 py-2 text-center cursor-pointer bg-white hover:bg-gray-50">
-        
-        {files.length > 0 ? `${files.length} file(s) selected` : "Choose file(s)"}
-        <input
-          type="file"
-          multiple
-          onChange={(e) => e.target.files && setFiles(Array.from(e.target.files))}
-          className="hidden"
-        />
-      </label>
+      {/* File Upload Button - Only show if URL contains "contact" */}
+      {pageUrl.toLowerCase().includes("contact") && (
+        <>
+          <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>
+            Upload Images <br /> (e.g., concept art, designs, inspirations)
+          </label>
+          <label className="block w-full border border-gray-400 rounded-lg px-3 py-2 text-center cursor-pointer bg-white hover:bg-gray-50">
+            {files.length > 0 ? `${files.length} file(s) selected` : "Choose file(s)"}
+            <input
+              type="file"
+              multiple
+              onChange={(e) => e.target.files && setFiles(Array.from(e.target.files))}
+              className="hidden"
+            />
+          </label>
+        </>
+      )}
 
       {/* Checkboxes */}
       <div className="flex flex-col gap-2">
