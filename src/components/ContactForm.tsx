@@ -9,6 +9,7 @@ export default function ContactForm() {
   const [lastName, setLastName] = useState("");
   const [company, setCompany] = useState("");
   const [service, setService] = useState<string[]>([]);
+  const [businessType, setBusinessType] = useState("");
   const [businessStatus, setBusinessStatus] = useState("");
   const [country, setCountry] = useState("");
   const [phone, setPhone] = useState<string | undefined>();
@@ -51,16 +52,10 @@ export default function ContactForm() {
   // Toast message state
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  // EMAIL + OTP
+  // EMAIL
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [verified, setVerified] = useState(false);
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // NEW: loading states for API actions
-  const [otpTimer, setOtpTimer] = useState(0);
 
   // Show toast and auto-hide after 2 seconds
   const showToast = (message: string, type: "success" | "error") => {
@@ -68,25 +63,25 @@ export default function ContactForm() {
     setTimeout(() => setToast(null), 2000);
   };
 
-  // Countdown for OTP resend
-  useEffect(() => {
-    if (otpTimer <= 0) return;
-    const id = setInterval(() => {
-      setOtpTimer((t) => (t > 1 ? t - 1 : 0));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [otpTimer]);
+
 
   // Get page URL and title
   const [pageUrl, setPageUrl] = useState("");
   const [pageTitle, setPageTitle] = useState("");
 
+
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setPageUrl(window.location.href);
-      setPageTitle(document.title || "");
-    }
+    window.addEventListener('message', (event) => {
+      if (event.data?.pageUrl) {
+        console.log(event.data.pageUrl);
+        setPageTitle(event.data.pageTitle || "");
+        setPageUrl(event.data.pageUrl);
+        
+        
+      }
+    });
   }, []);
+
 
   // keep phoneCountry in sync with the country select (PhoneInput expects lower-case)
   useEffect(() => {
@@ -102,8 +97,10 @@ export default function ContactForm() {
     } else {
       setPhoneCountry(undefined);
     }
+    
   }, [country]);
-
+     console.log(pageTitle,'page url title');
+    console.log(pageUrl,'page url');
   // Update phone input with country code when country is selected
   useEffect(() => {
     if (country) {
@@ -137,80 +134,11 @@ export default function ContactForm() {
     else setEmailError("");
   };
 
-  // SEND OTP
-  const sendOtp = async () => {
-    if (!email) {
-      setEmailError("Email is required");
-      return;
-    }
-    if (emailError) return;
 
-    setIsSendingOtp(true);
-    try {
-      const res = await fetch("https://odoo.royisal.com/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await res.json();
-
-      if (!data.success) {
-        showToast(data.error || "Failed to send OTP", "error");
-        return;
-      }
-      showToast("OTP sent! Check your email.", "success");
-      // Store OTP in localStorage
-      localStorage.setItem(
-        "email_otp",
-        JSON.stringify({ code: data.otp, expires: Date.now() + 5 * 60 * 1000 })
-       );
-
-      setOtpSent(true);
-      setOtpTimer(30);
-      
-    } catch (err) {
-      console.error(err);
-      showToast("Network error! Please try again.", "error");
-    } finally {
-      setIsSendingOtp(false);
-    }
-  };
-
-  // VERIFY OTP
-  const verifyOtp = () => {
-    const stored = localStorage.getItem("email_otp");
-
-    if (!stored) {
-      showToast("No OTP stored — request again", "error");
-      return;
-    }
-
-    const { code, expires } = JSON.parse(stored);
-
-    if (Date.now() > expires) {
-      showToast("OTP expired, please resend", "error");
-      localStorage.removeItem("email_otp");
-      return;
-    }
-
-    if (otp === code) {
-      setVerified(true);
-      localStorage.removeItem("email_otp");
-      showToast("Email verified!", "success");
-    } else {
-      showToast("Invalid OTP!", "error");
-    }
-  };
 
   // HANDLE FORM SUBMIT
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!verified) {
-      alert("Please verify your email first!");
-      return;
-    }
 
     const buildFormData = () => {
       const fd = new FormData();
@@ -222,6 +150,7 @@ export default function ContactForm() {
       fd.append("phone", phone ?? "");
       fd.append("company", company || "");
       fd.append("businessStatus", businessStatus);
+      fd.append("business_type", businessType);
       fd.append("country", country);
       fd.append("message", message || "");
       fd.append("agreeTerms", "true"); // Always true since form can't be submitted without verification
@@ -247,7 +176,7 @@ export default function ContactForm() {
     setIsSubmitting(true);
     try {
       const formLead = buildFormData();
-      await fetch("https://odoo.royisal.com/add-lead", {
+      await fetch("http://localhost:8871/add-lead", {
         method: "POST",
         body: formLead,
       });
@@ -255,12 +184,49 @@ export default function ContactForm() {
      // Hide form and show thank you message
      setFormSubmitted(true);
 
-     // Check if page title contains "gothic" and redirect after 2.5 seconds
+     // Check page title and redirect after 2.5 seconds
      const titleLower = pageTitle.toLowerCase();
-     if (titleLower.includes("gothic")) {
+     
+     // Map of page titles to redirect URLs
+     const redirectMap: Record<string, string> = {
+       "gothic": "https://royisal.com/wp-content/uploads/2025/12/Gothic-Mania-Boo.pdf",
+       "mother bloom": "https://royisal.com/wp-content/uploads/2025/12/Mother_Bloom_RS.pdf",
+       "art of subtlety": "https://royisal.com/wp-content/uploads/2025/12/Art-of-subtlety.pdf",
+       "charmora": "https://royisal.com/wp-content/uploads/2025/12/Charmora.pdf",
+       "christmas sparkle": "https://royisal.com/wp-content/uploads/2025/12/Christmas-sparkle.pdf",
+       "fall autum": "https://royisal.com/wp-content/uploads/2025/12/Fall-autum.pdf",
+       "fashion groovy": "https://royisal.com/wp-content/uploads/2025/12/Fashion-Groovy.pdf",
+       "fashion groovy-mar": "https://crm.royisal.com/odoo/documents/0aCiRTTmRPKZafeOq2vExwo36",
+       "floral motif": "https://royisal.com/wp-content/uploads/2025/12/Floral-Motif.pdf",
+       "fun in fairytales": "https://royisal.com/wp-content/uploads/2025/12/Fun-in-Fairytales.pdf",
+       "geo fauna": "https://royisal.com/wp-content/uploads/2025/12/Geo-fauna.pdf",
+       "gothic mania boo": "https://royisal.com/wp-content/uploads/2025/12/Gothic-Mania-Boo.pdf",
+       "light weight gold": "https://royisal.com/wp-content/uploads/2025/12/Light-weight-gold.pdf",
+       "love-bound": "https://royisal.com/wp-content/uploads/2025/12/Love_Bound_RS.pdf",
+       "midnight poetry": "https://royisal.com/wp-content/uploads/2025/12/Midnight-poetry-.pdf",
+       "mix metal": "https://royisal.com/wp-content/uploads/2025/12/Mix-metal.pdf",
+       "mother of pearl": "https://royisal.com/wp-content/uploads/2025/12/Mother-of-pearl.pdf",
+       "savage-luxe": "https://royisal.com/wp-content/uploads/2025/12/Savage-luxe.pdf",
+       "sports odyssey": "https://royisal.com/wp-content/uploads/2025/12/Sports-Odyssey-.pdf",
+       "the galaxy": "https://royisal.com/wp-content/uploads/2025/12/The-Galaxy-.pdf",
+       "trecery filigree": "https://royisal.com/wp-content/uploads/2025/12/Trecery-Filigree.pdf",
+       "urban edge": "https://royisal.com/wp-content/uploads/2025/12/Urban-edge.pdf",
+       "vincent van goqh": "https://royisal.com/wp-content/uploads/2025/12/Vincent-van-goqh.pdf"
+     };
+
+     // Check if any key in the map is included in the page title
+     let redirectUrl = "";
+     for (const [key, url] of Object.entries(redirectMap)) {
+       if (titleLower.includes(key)) {
+         redirectUrl = url;
+         break;
+       }
+     }
+
+     // Redirect if a matching URL is found
+     if (redirectUrl) {
        setTimeout(() => {
-         // Redirect to gothic page (adjust URL as needed)
-         window.location.href = "/gothic";
+         window.location.href = redirectUrl;
        }, 2500);
      }
     } catch (err) {
@@ -279,8 +245,9 @@ export default function ContactForm() {
 
   // If form is submitted, show thank you message
   if (formSubmitted) {
+    const titleContainsContact = pageTitle.toLowerCase().includes("contact");
     return (
-      <div className="max-w-lg mx-auto bg-white p-8 rounded-xl shadow-md text-center space-y-6" style={{ fontFamily: "'Kanit', sans-serif" }}>
+      <div className={`${titleContainsContact ? 'max-w-lg' : 'max-w-2xl'} mx-auto bg-white p-8 rounded-xl text-center space-y-6`} style={{ fontFamily: "'Kanit', sans-serif" }}>
         <h2 className="text-2xl md:text-3xl font-bold text-[#a50019]">
           Thank you for reaching out to us!
         </h2>
@@ -289,8 +256,8 @@ export default function ContactForm() {
         </p>
 
         <div className="space-y-4">
-          <p className="font-semibold">In the meantime, you can:</p>
-          <ul className="space-y-2 text-left list-disc list-inside">
+          <p className="font-semibold ">In the meantime, you can:</p>
+          <ul className="space-y-2 text-left list-disc list-inside mx-auto max-w-md">
             <li>
               <a href="https://www.linkedin.com/company/royisal/" target="_blank" rel="noopener noreferrer" className="text-[#a50019] hover:underline">
                 Connect with us on LinkedIn
@@ -339,7 +306,7 @@ export default function ContactForm() {
     )}
     
     <form
-      className="max-w-lg mx-auto bg-white p-6 rounded-xl shadow-md space-y-6 text-sm md:text-base"
+      className={`${pageTitle.toLowerCase().includes("contact") ? 'max-w-lg' : 'max-w-full'} mx-auto bg-white p-6 rounded-xl shadow-md space-y-6 text-sm md:text-base`}
       style={{ fontFamily: "'Kanit', sans-serif" }}
       onSubmit={handleSubmit}
     >
@@ -381,7 +348,7 @@ export default function ContactForm() {
         />
       </div>
 
-      {/* Email + OTP */}
+      {/* Email */}
       <div>
         <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Email*</label>
         <input
@@ -389,68 +356,10 @@ export default function ContactForm() {
           value={email}
           onChange={(e) => validateEmail(e.target.value)}
           placeholder="Email"
-          className={`w-full border h-12 px-3 py-2 rounded-[10px] mt-2 ${emailError ? "border-red-500" : ""}`}
+          className={`w-full border border-black h-12 px-3 py-2 rounded-[10px] mt-2 ${emailError ? "border-red-500" : ""}`}
           required
         />
         {emailError && <p className="text-red-500 text-xs">{emailError}</p>}
-
-        {!verified && (
-          <div className="mt-2">
-            {!otpSent ? (
-              <button
-                type="button"
-                onClick={sendOtp}
-                disabled={isSendingOtp}
-                className={`w-full py-2 rounded-lg text-white ${
-                  isSendingOtp
-                    ? "bg-[#8f0016] opacity-70 cursor-not-allowed"
-                    : "bg-[#a50019] hover:bg-[#8f0016] hover:cursor-pointer"
-                }`}
-              >
-                {isSendingOtp ? "Sending..." : "Send OTP"}
-              </button>
-            ) : (
-              <>
-                <input
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  placeholder="Enter OTP"
-                  className="w-full border px-3 py-2 rounded-lg mt-2"
-                />
-                <div className="flex gap-2 mt-2">
-                  <button
-                    type="button"
-                    onClick={verifyOtp}
-                    disabled={isSendingOtp}
-                    className={`flex-1 bg-[#a50019] text-white py-2 rounded-lg ${
-                      isSendingOtp ? "opacity-60 cursor-not-allowed" : "hover:bg-[#8f0016] hover:cursor-pointer"
-                    }`}
-                  >
-                    Verify OTP
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isSendingOtp || otpTimer > 0) return;
-                      // clear current otp input when resending
-                      setOtp("");
-                      sendOtp();
-                    }}
-                    disabled={otpTimer > 0 || isSendingOtp}
-                    className={`flex-1 py-2 rounded-lg text-white ${
-                      otpTimer > 0 || isSendingOtp
-                        ? "bg-gray-400 cursor-not-allowed opacity-70"
-                        : "bg-[#a50019] hover:bg-[#8f0016] hover:cursor-pointer"
-                    }`}
-                  >
-                    {isSendingOtp ? "Sending..." : otpTimer > 0 ? `Resend OTP (${otpTimer}s)` : "Resend OTP"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Company */}
@@ -475,6 +384,7 @@ export default function ContactForm() {
                 type="checkbox"
                 checked={service.includes(option)}
                 onChange={() => toggleService(option)}
+                required={service.length === 0}
               />
               {option === "ODM" ? "ODM (Your brand, our designs)" :
                option === "OEM" ? "OEM (You design, we create)" :
@@ -482,6 +392,28 @@ export default function ContactForm() {
             </label>
           ))}
         </div>
+      </div>
+
+      {/* Business Type dropdown */}
+      <div>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Business Type*</label>
+        <select
+          value={businessType}
+          onChange={(e) => setBusinessType(e.target.value)}
+          className="w-full h-12 border border-black rounded-[10px] px-3 mt-2"
+          required
+        >
+          <option value="" disabled>Please Select</option>
+          <option value="Wholesaler (0-1 Year)">Wholesaler (0-1 Year)</option>
+          <option value="Wholesaler (1-5 Years)">Wholesaler (1-5 Years)</option>
+          <option value="Wholesaler (over 5 Years)">Wholesaler (over 5 Years)</option>
+          <option value="Store Retailers (Start up)">Store Retailers (Startup)</option>
+          <option value="Store Retailers (1-5 shops)">Store Retailers (1-5 shops)</option>
+          <option value="Store Retailers (over 5 shops)">Store Retailers (over 5 shops)</option>
+          <option value="Online Retailers (Startup 1 website)">Online Retailers (Startup 1 website)</option>
+          <option value="Online Retailers (over 2 websites)">Online Retailers (over 2 websites)</option>
+          <option value="Wholesale and Retail">Wholesale and Retail</option>
+        </select>
       </div>
 
       {/* Business Status */}
@@ -496,7 +428,7 @@ export default function ContactForm() {
           <option value="">Select Business Status</option>
           <option value="In the business">In the business</option>
           <option value="Start Up">Start up</option>
-          <option value="Concept Stage">Concept Stage</option>
+          <option value="N/A">Concept Stage</option>
         </select>
       </div>
 
@@ -542,6 +474,7 @@ export default function ContactForm() {
             }}
             placeholder="Phone number"
             className="w-full h-12 border border-black rounded-[10px] px-3"
+            required
           />
          </div>
        </div>
@@ -554,23 +487,21 @@ export default function ContactForm() {
         className="w-full border border-black rounded-[10px] px-3 py-2"
       />
 
-      {/* File Upload Button - Only show if URL contains "contact" */}
-      {pageUrl.toLowerCase().includes("contact") && (
-        <>
-          <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>
-            Upload Images <br /> (e.g., concept art, designs, inspirations)
-          </label>
-          <label className="block w-full border border-gray-400 rounded-lg px-3 py-2 text-center cursor-pointer bg-white hover:bg-gray-50">
-            {files.length > 0 ? `${files.length} file(s) selected` : "Choose file(s)"}
-            <input
-              type="file"
-              multiple
-              onChange={(e) => e.target.files && setFiles(Array.from(e.target.files))}
-              className="hidden"
-            />
-          </label>
-        </>
-      )}
+      {/* File Upload Button */}
+      <div>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>
+          Upload Images <br /> (e.g., concept art, designs, inspirations)
+        </label>
+        <label className="block w-full border border-gray-400 rounded-lg px-3 py-2 text-center cursor-pointer bg-white hover:bg-gray-50 mt-2">
+          {files.length > 0 ? `${files.length} file(s) selected` : "Choose file(s)"}
+          <input
+            type="file"
+            multiple
+            onChange={(e) => e.target.files && setFiles(Array.from(e.target.files))}
+            className="hidden"
+          />
+        </label>
+      </div>
 
       {/* Checkboxes */}
       <div className="flex flex-col gap-2">
@@ -590,9 +521,9 @@ export default function ContactForm() {
 
       <button
         type="submit"
-        disabled={!verified || isSubmitting}
+        disabled={isSubmitting}
         className={`w-full py-2 rounded-lg ${
-          !verified || isSubmitting
+          isSubmitting
             ? "bg-gray-400 cursor-not-allowed text-white opacity-70"
             : "bg-[#a50019] text-white hover:bg-[#8f0016] hover:cursor-pointer"
         }`}
