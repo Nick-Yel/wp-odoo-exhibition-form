@@ -50,7 +50,7 @@ export default function ContactForm() {
   const [formSubmitted, setFormSubmitted] = useState(false);
 
   // Toast message state
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  // const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // EMAIL
   const [email, setEmail] = useState("");
@@ -58,10 +58,10 @@ export default function ContactForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Show toast and auto-hide after 2 seconds
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 2000);
-  };
+  // const showToast = (message: string, type: "success" | "error") => {
+  //   setToast({ message, type });
+  //   setTimeout(() => setToast(null), 2000);
+  // };
 
 
 
@@ -176,7 +176,7 @@ export default function ContactForm() {
     setIsSubmitting(true);
     try {
       const formLead = buildFormData();
-      await fetch("http://localhost:8871/add-lead", {
+      await fetch("http://odoo.royisal.com/add-lead", {
         method: "POST",
         body: formLead,
       });
@@ -295,7 +295,7 @@ export default function ContactForm() {
   return (
     <>
     {/* Toast notification */}
-    {toast && (
+    {/* {toast && (
       <div
         className={`fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-[10000] transition-opacity ${
           toast.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
@@ -303,7 +303,7 @@ export default function ContactForm() {
       >
         {toast.message}
       </div>
-    )}
+    )} */}
     
     <form
       className={`${pageTitle.toLowerCase().includes("contact") ? 'max-w-lg' : 'max-w-full'} mx-auto bg-white p-6 rounded-xl shadow-md space-y-6 text-sm md:text-base`}
