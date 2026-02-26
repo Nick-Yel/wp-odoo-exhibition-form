@@ -159,7 +159,7 @@ export default function ContactForm() {
       // attach page url and title
       fd.append("source_online", pageUrl);
       fd.append("pageUrl", pageUrl);
-      fd.append("pageTitle", pageTitle);
+      fd.append("pageTitle", 'Exhibition QR Form');
       fd.append("utm_source", utm.source);
       fd.append("utm_medium", utm.medium);
       fd.append("utm_campaign", utm.campaign);
