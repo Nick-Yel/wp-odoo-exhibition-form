@@ -176,7 +176,7 @@ export default function ContactForm() {
     setIsSubmitting(true);
     try {
       const formLead = buildFormData();
-      await fetch("http://odoo.royisal.com/add-lead", {
+      await fetch("https://odoo.royisal.com/add-lead", {
         method: "POST",
         body: formLead,
       });
