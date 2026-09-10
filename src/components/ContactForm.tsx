@@ -8,11 +8,13 @@ export default function ContactForm() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [company, setCompany] = useState("");
+  const [companyWebsite, setCompanyWebsite] = useState("");
   const [service, setService] = useState<string[]>([]);
   const [businessType, setBusinessType] = useState("");
   const [businessStatus, setBusinessStatus] = useState("");
   const [country, setCountry] = useState("");
   const [phone, setPhone] = useState<string | undefined>();
+  const [whatsapp, setWhatsapp] = useState<string | undefined>();
   // phoneCountry mirrors the select-driven country for PhoneInput (lowercase or undefined)
   const [phoneCountry, setPhoneCountry] = useState<string | undefined>();
   const [message, setMessage] = useState("");
@@ -50,20 +52,32 @@ export default function ContactForm() {
   const [formSubmitted, setFormSubmitted] = useState(false);
 
   // Toast message state
-  // const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  // EMAIL
+  // EMAIL + OTP
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [otpTimer, setOtpTimer] = useState(0);
 
   // Show toast and auto-hide after 2 seconds
-  // const showToast = (message: string, type: "success" | "error") => {
-  //   setToast({ message, type });
-  //   setTimeout(() => setToast(null), 2000);
-  // };
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 2000);
+  };
 
-
+  // Countdown for OTP resend
+  useEffect(() => {
+    if (otpTimer <= 0) return;
+    const id = setInterval(() => {
+      setOtpTimer((t) => (t > 1 ? t - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [otpTimer]);
 
   // Get page URL and title
   const [pageUrl, setPageUrl] = useState("");
@@ -129,16 +143,85 @@ export default function ContactForm() {
   // Email validation
   const validateEmail = (value: string) => {
     setEmail(value);
+    setVerified(false);
+    setOtpSent(false);
     if (!value) setEmailError("Email is required");
     else if (!/^\S+@\S+\.\S+$/.test(value)) setEmailError("Invalid email format");
     else setEmailError("");
   };
 
+  // SEND OTP
+  const sendOtp = async () => {
+    if (!email) {
+      setEmailError("Email is required");
+      return;
+    }
+    if (emailError) return;
 
+    setIsSendingOtp(true);
+    try {
+      const res = await fetch("https://odoo.royisal.com/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        showToast(data.error || "Failed to send OTP", "error");
+        return;
+      }
+      showToast("OTP sent! Check your email.", "success");
+      localStorage.setItem(
+        "email_otp",
+        JSON.stringify({ code: data.otp, expires: Date.now() + 5 * 60 * 1000 })
+      );
+
+      setOtpSent(true);
+      setOtpTimer(30);
+    } catch (err) {
+      console.error(err);
+      showToast("Network error! Please try again.", "error");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  // VERIFY OTP
+  const verifyOtp = () => {
+    const stored = localStorage.getItem("email_otp");
+
+    if (!stored) {
+      showToast("No OTP stored — request again", "error");
+      return;
+    }
+
+    const { code, expires } = JSON.parse(stored);
+
+    if (Date.now() > expires) {
+      showToast("OTP expired, please resend", "error");
+      localStorage.removeItem("email_otp");
+      return;
+    }
+
+    if (otp === code) {
+      setVerified(true);
+      localStorage.removeItem("email_otp");
+      showToast("Email verified!", "success");
+    } else {
+      showToast("Invalid OTP!", "error");
+    }
+  };
 
   // HANDLE FORM SUBMIT
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!verified) {
+      showToast("Please verify your email first!", "error");
+      return;
+    }
 
     const buildFormData = () => {
       const fd = new FormData();
@@ -148,7 +231,9 @@ export default function ContactForm() {
       fd.append("email", email);
       // phone: PhoneInput returns the full phone with country code
       fd.append("phone", phone ?? "");
+      fd.append("whatsapp", whatsapp ?? "");
       fd.append("company", company || "");
+      fd.append("company_website", companyWebsite || "");
       fd.append("businessStatus", businessStatus);
       fd.append("business_type", businessType);
       fd.append("country", country);
@@ -295,7 +380,7 @@ export default function ContactForm() {
   return (
     <>
     {/* Toast notification */}
-    {/* {toast && (
+    {toast && (
       <div
         className={`fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-[10000] transition-opacity ${
           toast.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
@@ -303,8 +388,8 @@ export default function ContactForm() {
       >
         {toast.message}
       </div>
-    )} */}
-    
+    )}
+
     <form
       className={`${pageTitle.toLowerCase().includes("contact") ? 'max-w-lg' : 'max-w-full'} mx-auto bg-white p-6 rounded-xl shadow-md space-y-6 text-sm md:text-base`}
       style={{ fontFamily: "'Kanit', sans-serif" }}
@@ -360,6 +445,64 @@ export default function ContactForm() {
           required
         />
         {emailError && <p className="text-red-500 text-xs">{emailError}</p>}
+
+        {!verified && (
+          <div className="mt-2">
+            {!otpSent ? (
+              <button
+                type="button"
+                onClick={sendOtp}
+                disabled={isSendingOtp}
+                className={`w-full py-2 rounded-lg text-white ${
+                  isSendingOtp
+                    ? "bg-[#8f0016] opacity-70 cursor-not-allowed"
+                    : "bg-[#a50019] hover:bg-[#8f0016] hover:cursor-pointer"
+                }`}
+              >
+                {isSendingOtp ? "Sending..." : "Send OTP"}
+              </button>
+            ) : (
+              <>
+                <input
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  placeholder="Enter OTP"
+                  className="w-full border border-black px-3 py-2 rounded-[10px] mt-2"
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={verifyOtp}
+                    disabled={isSendingOtp}
+                    className={`flex-1 bg-[#a50019] text-white py-2 rounded-lg ${
+                      isSendingOtp ? "opacity-60 cursor-not-allowed" : "hover:bg-[#8f0016] hover:cursor-pointer"
+                    }`}
+                  >
+                    Verify OTP
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSendingOtp || otpTimer > 0) return;
+                      setOtp("");
+                      sendOtp();
+                    }}
+                    disabled={otpTimer > 0 || isSendingOtp}
+                    className={`flex-1 py-2 rounded-lg text-white ${
+                      otpTimer > 0 || isSendingOtp
+                        ? "bg-gray-400 cursor-not-allowed opacity-70"
+                        : "bg-[#a50019] hover:bg-[#8f0016] hover:cursor-pointer"
+                    }`}
+                  >
+                    {isSendingOtp ? "Sending..." : otpTimer > 0 ? `Resend OTP (${otpTimer}s)` : "Resend OTP"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        {verified && <p className="text-green-600 text-xs mt-1">Email verified</p>}
       </div>
 
       {/* Company */}
@@ -371,6 +514,18 @@ export default function ContactForm() {
           placeholder="Company Name"
           className="w-full h-12 border border-black rounded-[10px] px-3 mt-2 text-sm md:text-base"
           required
+        />
+      </div>
+
+      {/* Company Website */}
+      <div>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>Company Website</label>
+        <input
+          type="url"
+          value={companyWebsite}
+          onChange={(e) => setCompanyWebsite(e.target.value)}
+          placeholder="https://yourcompany.com"
+          className="w-full h-12 border border-black rounded-[10px] px-3 mt-2 text-sm md:text-base"
         />
       </div>
 
@@ -479,6 +634,21 @@ export default function ContactForm() {
          </div>
        </div>
 
+      {/* WhatsApp */}
+      <div>
+        <label className="font-medium text-sm md:text-base" style={{ fontWeight: 400 }}>WhatsApp Number</label>
+        <div className="mt-2">
+          <PhoneInput
+            defaultCountry={phoneCountry as any}
+            country={phoneCountry ? (phoneCountry as any) : undefined}
+            value={whatsapp ?? ""}
+            onChange={(val) => setWhatsapp(val)}
+            placeholder="WhatsApp number"
+            className="w-full h-12 border border-black rounded-[10px] px-3"
+          />
+        </div>
+      </div>
+
       {/* Message */}
       <textarea
         value={message}
@@ -521,9 +691,9 @@ export default function ContactForm() {
 
       <button
         type="submit"
-        disabled={isSubmitting}
+        disabled={!verified || isSubmitting}
         className={`w-full py-2 rounded-lg ${
-          isSubmitting
+          !verified || isSubmitting
             ? "bg-gray-400 cursor-not-allowed text-white opacity-70"
             : "bg-[#a50019] text-white hover:bg-[#8f0016] hover:cursor-pointer"
         }`}
